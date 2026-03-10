@@ -1,0 +1,7 @@
+autogluon.timeseries
+pandas
+xlrd
+openpyxl
+python-dateutil
+reportlab
+pytest

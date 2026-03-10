@@ -1,0 +1,12 @@
+
+dowload arquivo para a pasta data ----> rodar
+
+retrain = train modelo
+predict = forecast using the modelo
+
+cd "/Users/marcelmendesreis/Library/CloudStorage/GoogleDrive-marcel.reis.vet@gmail.com/My Drive/Projects/2026_03_predict"
+source .venv/bin/activate
+
+
+python -m forecast_cli predict --base-dir .
+python -m forecast_cli retrain --base-dir .
