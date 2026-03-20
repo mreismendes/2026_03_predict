@@ -8,8 +8,7 @@ with confidence intervals, and produces a PDF report.
 
 ```bash
 source .venv/bin/activate
-python -m forecast_cli predict --base-dir .   # forecast using trained models (trains if needed)
-python -m forecast_cli retrain --base-dir .    # force retrain all models
+python -m forecast_cli --base-dir .            # always trains + predicts (single command)
 pytest                                         # run tests
 pytest tests/test_data_io.py tests/test_features.py tests/test_launcher.py  # fast tests only
 pytest -k "not forecasting and not reporting and not pipeline"              # same, by exclusion

@@ -8,7 +8,7 @@ import pandas as pd
 from cepea_forecast.config import build_paths
 from cepea_forecast.data_io import LoadedSourceData, find_data_files, load_source_data
 from cepea_forecast.features import engineer_features
-from cepea_forecast.forecasting import MODEL_SPECS, aggregate_period_frame, forecast_model, model_ready, train_model
+from cepea_forecast.forecasting import MODEL_SPECS, aggregate_period_frame, forecast_model, train_model
 from cepea_forecast.reporting import generate_forecast_report
 
 
@@ -54,13 +54,8 @@ def _train_all(paths, loaded: LoadedSourceData, source_file: Path, data_status: 
         )
 
 
-def _ensure_models(paths, loaded: LoadedSourceData, source_file: Path, data_status: str, aggregated: pd.DataFrame) -> None:
-    if all(model_ready(_model_dir_for(paths, spec.model_id)) for spec in MODEL_SPECS.values()):
-        return
-    _train_all(paths, loaded=loaded, source_file=source_file, data_status=data_status, aggregated=aggregated)
-
-
-def retrain(base_dir: Path | str = ".") -> PipelineResult:
+def run(base_dir: Path | str = ".") -> PipelineResult:
+    """Train all models then forecast. Always retrains from scratch."""
     paths = build_paths(base_dir)
     boi_path, bezerro_path = find_data_files(paths.data_dir)
     loaded = load_source_data(paths.data_dir)
@@ -70,19 +65,6 @@ def retrain(base_dir: Path | str = ".") -> PipelineResult:
     )
     aggregated = _aggregate_weekly(loaded.frame)
     _train_all(paths, loaded=loaded, source_file=boi_path, data_status=data_result.status, aggregated=aggregated)
-    return PipelineResult(command="retrain", source_file=boi_path, data_result=data_result)
-
-
-def predict(base_dir: Path | str = ".") -> PipelineResult:
-    paths = build_paths(base_dir)
-    boi_path, bezerro_path = find_data_files(paths.data_dir)
-    loaded = load_source_data(paths.data_dir)
-    data_result = DataSourceResult(
-        status="manual_upload",
-        message=f"BOI: {boi_path.name}" + (f", BEZERRO: {bezerro_path.name}" if bezerro_path else ""),
-    )
-    aggregated = _aggregate_weekly(loaded.frame)
-    _ensure_models(paths, loaded=loaded, source_file=boi_path, data_status=data_result.status, aggregated=aggregated)
 
     bundles = []
     for spec in MODEL_SPECS.values():
@@ -107,7 +89,7 @@ def predict(base_dir: Path | str = ".") -> PipelineResult:
         source_file=boi_path,
     )
     return PipelineResult(
-        command="predict",
+        command="run",
         source_file=boi_path,
         data_result=data_result,
         predictions_path=output_path,

@@ -4,12 +4,11 @@ import argparse
 import os
 from pathlib import Path
 
-from cepea_forecast.pipeline import PipelineResult, predict, retrain
+from cepea_forecast.pipeline import PipelineResult, run
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="CEPEA weekly forecasting CLI")
-    parser.add_argument("command", choices=["predict", "retrain"], help="Command to execute")
     parser.add_argument("--base-dir", default=".", help="Project root containing data/ and artifacts/")
     return parser
 
@@ -47,10 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(os.cpu_count() or 1))
 
     try:
-        if args.command == "predict":
-            result = predict(base_dir=base_dir)
-        else:
-            result = retrain(base_dir=base_dir)
+        result = run(base_dir=base_dir)
     except Exception as exc:
         print(f"Error: {exc}")
         return 1
