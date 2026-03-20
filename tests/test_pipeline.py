@@ -109,11 +109,11 @@ def test_predict_trains_missing_models_and_writes_output(tmp_path: Path, monkeyp
 
     result = predict(base_dir=tmp_path)
 
-    assert len(trained) == 4
+    assert len(trained) == 1
     assert all(record[2] == "Target" for record in trained)
     assert all(record[3] == ("covariate_1",) for record in trained)
     assert result.predictions_path is not None
     assert result.predictions_path.exists()
     assert result.report_path is not None
     assert result.report_path.exists()
-    assert len(result.predictions) == 96
+    assert len(result.predictions) == 52

@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from cepea_forecast.config import DEFAULT_AUTOGUON_PRESET, MONTHLY_FORECAST_LENGTHS, WEEKLY_FORECAST_LENGTHS
+from cepea_forecast.config import DEFAULT_AUTOGUON_PRESET, WEEKLY_FORECAST_LENGTH
+from cepea_forecast.features import build_future_known_covariates, known_covariates_for
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class ModelSpec:
     seasonal_period: int
     item_id: str
     title: str
+    known_covariates_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -33,41 +35,15 @@ class ForecastBundle:
 
 
 MODEL_SPECS = {
-    "weekly_26": ModelSpec(
-        model_id="weekly_26",
-        granularity="weekly",
-        frequency="W-FRI",
-        prediction_length=WEEKLY_FORECAST_LENGTHS[0],
-        seasonal_period=52,
-        item_id="target_weekly_26",
-        title="Weekly forecast - 26 periods",
-    ),
     "weekly_52": ModelSpec(
         model_id="weekly_52",
         granularity="weekly",
         frequency="W-FRI",
-        prediction_length=WEEKLY_FORECAST_LENGTHS[1],
+        prediction_length=WEEKLY_FORECAST_LENGTH,
         seasonal_period=52,
         item_id="target_weekly_52",
         title="Weekly forecast - 52 periods",
-    ),
-    "monthly_6": ModelSpec(
-        model_id="monthly_6",
-        granularity="monthly",
-        frequency="ME",
-        prediction_length=MONTHLY_FORECAST_LENGTHS[0],
-        seasonal_period=12,
-        item_id="target_monthly_6",
-        title="Monthly forecast - 6 periods",
-    ),
-    "monthly_12": ModelSpec(
-        model_id="monthly_12",
-        granularity="monthly",
-        frequency="ME",
-        prediction_length=MONTHLY_FORECAST_LENGTHS[1],
-        seasonal_period=12,
-        item_id="target_monthly_12",
-        title="Monthly forecast - 12 periods",
+        known_covariates_names=tuple(known_covariates_for("weekly")),
     ),
 }
 
@@ -85,8 +61,6 @@ def _autogluon_modules():
 def _resample_rule(granularity: str) -> str:
     if granularity == "weekly":
         return "W-FRI"
-    if granularity == "monthly":
-        return "ME"
     raise ValueError(f"Unsupported granularity: {granularity}")
 
 
@@ -178,8 +152,9 @@ def train_model(
         path=str(model_dir),
         freq=spec.frequency,
         target="target",
+        known_covariates_names=list(spec.known_covariates_names) if spec.known_covariates_names else None,
         quantile_levels=[0.1, 0.5, 0.9],
-        eval_metric="MASE",
+        eval_metric="WQL",
         eval_metric_seasonal_period=spec.seasonal_period,
         verbosity=2,
     )
@@ -200,7 +175,8 @@ def train_model(
         "seasonal_period": str(spec.seasonal_period),
         "target_column": target_name,
         "internal_target_column": "target",
-        "covariate_type": "past_covariates",
+        "known_covariates": json.dumps(list(spec.known_covariates_names)),
+        "covariate_type": "known+past",
         "covariate_count": str(len(covariate_names)),
         "covariate_columns": json.dumps(covariate_names),
         "covariate_labels": json.dumps(covariate_labels, ensure_ascii=False, sort_keys=True),
@@ -282,10 +258,26 @@ def forecast_model(
     source_file: Path,
     data_status: str,
 ) -> ForecastBundle:
+    TimeSeriesDataFrame, _ = _autogluon_modules()
     predictor = load_predictor(model_dir)
     metadata = load_metadata(model_dir)
     data = build_timeseries_frame(aggregated, spec.item_id)
-    forecast = predictor.predict(data)
+
+    known_covariates = None
+    if spec.known_covariates_names:
+        last_timestamp = aggregated.index.max()
+        future_df = build_future_known_covariates(
+            last_timestamp=last_timestamp,
+            prediction_length=spec.prediction_length,
+            frequency=spec.frequency,
+            item_id=spec.item_id,
+            known_covariates_names=spec.known_covariates_names,
+        )
+        known_covariates = TimeSeriesDataFrame.from_data_frame(
+            future_df, id_column="item_id", timestamp_column="timestamp"
+        )
+
+    forecast = predictor.predict(data, known_covariates=known_covariates)
     forecast_frame = normalize_forecast_frame(forecast)
     rows = forecast_to_rows(
         forecast_frame=forecast_frame,

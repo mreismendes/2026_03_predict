@@ -9,14 +9,14 @@ from cepea_forecast.reporting import _forecast_table_data, generate_forecast_rep
 
 
 def test_generate_forecast_report_creates_pdf(tmp_path: Path) -> None:
-    spec = MODEL_SPECS["monthly_6"]
+    spec = MODEL_SPECS["weekly_52"]
     history = pd.Series(
         [300.0, 305.0, 307.5],
-        index=pd.to_datetime(["2025-10-31", "2025-11-30", "2025-12-31"]),
+        index=pd.to_datetime(["2025-12-19", "2025-12-26", "2026-01-02"]),
     )
     forecast_frame = pd.DataFrame(
         {
-            "timestamp": pd.date_range("2026-01-31", periods=6, freq="ME"),
+            "timestamp": pd.date_range("2026-01-09", periods=6, freq="W-FRI"),
             "mean": [308.0, 309.0, 310.0, 311.0, 312.0, 313.0],
             "0.1": [300.0, 301.0, 302.0, 303.0, 304.0, 305.0],
             "0.5": [308.0, 309.0, 310.0, 311.0, 312.0, 313.0],
@@ -36,7 +36,7 @@ def test_generate_forecast_report_creates_pdf(tmp_path: Path) -> None:
             "0.9": forecast_frame["0.9"],
             "source_file": ["data/source.xls"] * 6,
             "data_status": ["manual_upload"] * 6,
-            "model_path": ["artifacts/models/monthly_6"] * 6,
+            "model_path": ["artifacts/models/weekly_52"] * 6,
             "model_trained_at": ["2026-03-09T12:00:00+00:00"] * 6,
         }
     )
@@ -46,7 +46,7 @@ def test_generate_forecast_report_creates_pdf(tmp_path: Path) -> None:
         forecast_frame=forecast_frame,
         rows=rows,
         source_file=Path("data/source.xls"),
-        model_dir=Path("artifacts/models/monthly_6"),
+        model_dir=Path("artifacts/models/weekly_52"),
         metadata={
             "preset": "fast_training",
             "target_column": "Settlement BRL",
@@ -62,7 +62,7 @@ def test_generate_forecast_report_creates_pdf(tmp_path: Path) -> None:
 
 
 def test_forecast_table_data_contains_all_forecast_rows() -> None:
-    spec = MODEL_SPECS["weekly_26"]
+    spec = MODEL_SPECS["weekly_52"]
     forecast_frame = pd.DataFrame(
         {
             "timestamp": pd.date_range("2026-03-13", periods=3, freq="W-FRI"),
@@ -85,7 +85,7 @@ def test_forecast_table_data_contains_all_forecast_rows() -> None:
             "0.9": forecast_frame["0.9"],
             "source_file": ["data/source.xls"] * 3,
             "data_status": ["manual_upload"] * 3,
-            "model_path": ["artifacts/models/weekly_26"] * 3,
+            "model_path": ["artifacts/models/weekly_52"] * 3,
             "model_trained_at": ["2026-03-09T12:00:00+00:00"] * 3,
         }
     )
@@ -95,7 +95,7 @@ def test_forecast_table_data_contains_all_forecast_rows() -> None:
         forecast_frame=forecast_frame,
         rows=rows,
         source_file=Path("data/source.xls"),
-        model_dir=Path("artifacts/models/weekly_26"),
+        model_dir=Path("artifacts/models/weekly_52"),
         metadata={"target_column": "Target"},
     )
 

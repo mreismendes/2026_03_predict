@@ -7,6 +7,7 @@ import pandas as pd
 
 from cepea_forecast.config import build_paths
 from cepea_forecast.data_io import LoadedSourceData, find_latest_data_file, load_source_data
+from cepea_forecast.features import engineer_features
 from cepea_forecast.forecasting import MODEL_SPECS, aggregate_period_frame, forecast_model, model_ready, train_model
 from cepea_forecast.reporting import generate_forecast_report
 
@@ -44,17 +45,15 @@ def _model_dir_for(paths, model_id: str) -> Path:
     return paths.models_dir / model_id
 
 
-def _aggregate_by_granularity(daily: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    return {
-        "weekly": aggregate_period_frame(daily, granularity="weekly"),
-        "monthly": aggregate_period_frame(daily, granularity="monthly"),
-    }
+def _aggregate_weekly(daily: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate daily data to weekly and apply feature engineering."""
+    aggregated = aggregate_period_frame(daily, "weekly")
+    enriched, _ = engineer_features(aggregated, "weekly")
+    return enriched
 
 
-def _train_all(paths, loaded: LoadedSourceData, source_file: Path, data_status: str) -> None:
-    aggregated_frames = _aggregate_by_granularity(loaded.frame)
+def _train_all(paths, loaded: LoadedSourceData, source_file: Path, data_status: str, aggregated: pd.DataFrame) -> None:
     for spec in MODEL_SPECS.values():
-        aggregated = aggregated_frames[spec.granularity]
         model_dir = _model_dir_for(paths, spec.model_id)
         train_model(
             aggregated=aggregated,
@@ -72,26 +71,26 @@ def retrain(base_dir: Path | str = ".") -> PipelineResult:
     paths = build_paths(base_dir)
     source_file, data_result = resolve_latest_data_file(paths)
     loaded = load_source_data(source_file)
-    _train_all(paths, loaded=loaded, source_file=source_file, data_status=data_result.status)
+    aggregated = _aggregate_weekly(loaded.frame)
+    _train_all(paths, loaded=loaded, source_file=source_file, data_status=data_result.status, aggregated=aggregated)
     return PipelineResult(command="retrain", source_file=source_file, data_result=data_result)
 
 
-def _ensure_models(paths, loaded: LoadedSourceData, source_file: Path, data_status: str) -> None:
+def _ensure_models(paths, loaded: LoadedSourceData, source_file: Path, data_status: str, aggregated: pd.DataFrame) -> None:
     if all(model_ready(_model_dir_for(paths, spec.model_id)) for spec in MODEL_SPECS.values()):
         return
-    _train_all(paths, loaded=loaded, source_file=source_file, data_status=data_status)
+    _train_all(paths, loaded=loaded, source_file=source_file, data_status=data_status, aggregated=aggregated)
 
 
 def predict(base_dir: Path | str = ".") -> PipelineResult:
     paths = build_paths(base_dir)
     source_file, data_result = resolve_latest_data_file(paths)
     loaded = load_source_data(source_file)
-    _ensure_models(paths, loaded=loaded, source_file=source_file, data_status=data_result.status)
-    aggregated_frames = _aggregate_by_granularity(loaded.frame)
+    aggregated = _aggregate_weekly(loaded.frame)
+    _ensure_models(paths, loaded=loaded, source_file=source_file, data_status=data_result.status, aggregated=aggregated)
 
     bundles = []
     for spec in MODEL_SPECS.values():
-        aggregated = aggregated_frames[spec.granularity]
         model_dir = _model_dir_for(paths, spec.model_id)
         bundles.append(
             forecast_model(
@@ -103,7 +102,7 @@ def predict(base_dir: Path | str = ".") -> PipelineResult:
             )
         )
 
-    combined = pd.concat([bundle.rows for bundle in bundles], ignore_index=True)
+    combined = bundles[0].rows if len(bundles) == 1 else pd.concat([b.rows for b in bundles], ignore_index=True)
     paths.predictions_dir.mkdir(parents=True, exist_ok=True)
     output_path = paths.predictions_dir / "latest_forecast.csv"
     combined.to_csv(output_path, index=False)

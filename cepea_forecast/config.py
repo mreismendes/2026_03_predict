@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_AUTOGUON_PRESET = "best_quality"
-WEEKLY_FORECAST_LENGTHS = [26, 52]
-MONTHLY_FORECAST_LENGTHS = [6, 12]
+DEFAULT_AUTOGUON_PRESET = "fast_training"
+WEEKLY_FORECAST_LENGTH = 52
 
 
 @dataclass(frozen=True)
