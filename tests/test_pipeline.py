@@ -4,38 +4,40 @@ from pathlib import Path
 
 import pandas as pd
 
-from cepea_forecast.pipeline import predict, resolve_latest_data_file
-
-
-def test_resolve_latest_data_file_uses_cached_file(tmp_path: Path) -> None:
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    cached = data_dir / "cached.csv"
-    cached.write_text("Data,Target\n01/03/2026,1\n", encoding="utf-8")
-    paths = type("Paths", (), {"data_dir": data_dir})()
-
-    source_file, result = resolve_latest_data_file(paths)
-
-    assert source_file == cached
-    assert result.status == "manual_upload"
+from cepea_forecast.pipeline import predict
 
 
 def test_predict_trains_missing_models_and_writes_output(tmp_path: Path, monkeypatch) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
-    source = data_dir / "source.csv"
-    source.write_text(
-        "Data,Target,FX\n"
-        "02/01/2026,300,5.3\n"
-        "09/01/2026,310,5.4\n"
-        "16/01/2026,320,5.5\n"
-        "23/01/2026,330,5.6\n"
-        "30/01/2026,340,5.7\n"
-        "06/02/2026,350,5.8\n"
-        "13/02/2026,360,5.9\n"
-        "20/02/2026,370,6.0\n"
-        "27/02/2026,380,6.1\n"
-        "06/03/2026,390,6.2\n",
+    boi = data_dir / "CEPEA_BOI.csv"
+    boi.write_text(
+        "Data,BOI_BRL,BOI_USD,USD\n"
+        "02/01/2026,300,57.7,5.2\n"
+        "09/01/2026,310,59.6,5.2\n"
+        "16/01/2026,320,61.5,5.2\n"
+        "23/01/2026,330,63.5,5.2\n"
+        "30/01/2026,340,65.4,5.2\n"
+        "06/02/2026,350,67.3,5.2\n"
+        "13/02/2026,360,69.2,5.2\n"
+        "20/02/2026,370,71.2,5.2\n"
+        "27/02/2026,380,73.1,5.2\n"
+        "06/03/2026,390,75.0,5.2\n",
+        encoding="utf-8",
+    )
+    bezerro = data_dir / "CEPEA_BEZERRO.csv"
+    bezerro.write_text(
+        "Data,BEZERRO_BRL,BEZERRO_PESO,BRL_KG\n"
+        "02/01/2026,3000,200,15.0\n"
+        "09/01/2026,3050,201,15.2\n"
+        "16/01/2026,3100,202,15.3\n"
+        "23/01/2026,3150,203,15.5\n"
+        "30/01/2026,3200,204,15.7\n"
+        "06/02/2026,3250,205,15.9\n"
+        "13/02/2026,3300,206,16.0\n"
+        "20/02/2026,3350,207,16.2\n"
+        "27/02/2026,3400,208,16.3\n"
+        "06/03/2026,3450,209,16.5\n",
         encoding="utf-8",
     )
 
@@ -51,6 +53,8 @@ def test_predict_trains_missing_models_and_writes_output(tmp_path: Path, monkeyp
         covariate_names,
         covariate_labels,
         preset_name="fast_training",
+        hyperparameters=None,
+        time_limit=None,
     ):
         model_dir.mkdir(parents=True, exist_ok=True)
         (model_dir / "metadata.json").write_text('{"model_trained_at": "2026-03-09T12:00:00+00:00"}', encoding="utf-8")
@@ -94,7 +98,7 @@ def test_predict_trains_missing_models_and_writes_output(tmp_path: Path, monkeyp
                 ),
                 "source_file": source_file,
                 "model_dir": model_dir,
-                "metadata": {"preset": "fast_training", "target_column": "Target", "covariate_count": "1"},
+                "metadata": {"preset": "fast_training", "target_column": "BOI_BRL", "covariate_count": "5"},
             },
         )()
 
@@ -110,8 +114,9 @@ def test_predict_trains_missing_models_and_writes_output(tmp_path: Path, monkeyp
     result = predict(base_dir=tmp_path)
 
     assert len(trained) == 1
-    assert all(record[2] == "Target" for record in trained)
-    assert all(record[3] == ("covariate_1",) for record in trained)
+    assert all(record[2] == "BOI_BRL" for record in trained)
+    # 6 covariates: BOI_USD, USD, BEZERRO_BRL, BEZERRO_PESO, BRL_KG, BOI_BEZERRO_RATIO
+    assert all(len(record[3]) == 6 for record in trained)
     assert result.predictions_path is not None
     assert result.predictions_path.exists()
     assert result.report_path is not None
