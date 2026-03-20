@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_AUTOGUON_PRESET = "fast_training"
+DEFAULT_AUTOGUON_PRESET = "best_quality"
 WEEKLY_FORECAST_LENGTH = 52
 
 
