@@ -57,7 +57,8 @@ All output directories (`artifacts/`, `output/`, `tmp/`) are gitignored. `data/`
 
 ## Development Workflow
 
-- Preset is `fast_training` during development (change to `best_quality` for production in config.py)
+- Preset is `best_quality` for production; `AUTOGLUON_HYPERPARAMETERS` in config.py lists all 18 models explicitly
+- `TRAINING_TIME_LIMIT` in config.py controls max training time (default None = unlimited)
 - Eval metric: WQL (Weighted Quantile Loss) for probabilistic forecast quality
 
 ## Gotchas
@@ -70,6 +71,8 @@ All output directories (`artifacts/`, `output/`, `tmp/`) are gitignored. `data/`
 - `forecast_cli.py` uses os.execv to re-exec under .venv python if not already in it
 - LOKY_MAX_CPU_COUNT set to physical cores on macOS (via sysctl hw.physicalcpu)
 - `known_covariates` must be provided at predict time via `build_future_known_covariates()`
+- Pretrained models (Chronos) download weights on first use (~1GB); first training requires internet
+- Training 18 models with `best_quality` takes 30-60+ min; set `TRAINING_TIME_LIMIT` in config.py to cap it
 - AutoGluon import is very slow (~3 min); tests that touch forecasting.py take ~3 min total
 - Config constant is `DEFAULT_AUTOGUON_PRESET` (typo of AUTOGLUON) — used in config.py:6, forecasting.py:10,163; do not rename without updating all 3 references
 
