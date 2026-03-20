@@ -19,7 +19,7 @@ pytest -k "not forecasting and not reporting and not pipeline"              # sa
 
 - `forecast_cli.py` - Entry point; auto-activates .venv, sets MPLCONFIGDIR/LOKY_MAX_CPU_COUNT
 - `cepea_forecast/cli.py` - Argparse CLI (predict | retrain)
-- `cepea_forecast/config.py` - Path layout (AppPaths), forecast lengths, preset (currently `fast_training` for dev)
+- `cepea_forecast/config.py` - Path layout (AppPaths), forecast lengths, preset, AUTOGLUON_HYPERPARAMETERS (27 models)
 - `cepea_forecast/data_io.py` - Loads CEPEA_BOI + CEPEA_BEZERRO files, merges on date (left join), BOI_BRL is target
 - `cepea_forecast/features.py` - Feature engineering: calendar known covariates + rolling/lag past covariates
 - `cepea_forecast/forecasting.py` - AutoGluon training/prediction with known_covariates, MODEL_SPECS, aggregation
@@ -35,19 +35,25 @@ pytest -k "not forecasting and not reporting and not pipeline"              # sa
 **Known covariates** (deterministic, available for future via Fourier decomposition):
 - sin_yearly_1..4, cos_yearly_1..4 (smooth yearly seasonality, replaces integer week_of_year)
 
-**Past covariates** (history only, auto-detected by AutoGluon):
-- Trend: rolling_mean_4, rolling_mean_13, rolling_mean_26
-- Momentum: momentum_4, momentum_13, momentum_26
+**Source covariates** (from data files, auto-detected as past covariates):
+- BOI_USD, USD, BEZERRO_BRL, BEZERRO_PESO, BRL_KG, BOI_BEZERRO_RATIO (BOI_BRL / BRL_KG)
+
+**Engineered past covariates** (history only, auto-detected by AutoGluon):
+- Trend: rolling_mean_4/13/26
+- Momentum: momentum_4/13/26
 - MA crossover: ma_ratio_4_13, ma_ratio_4_26
 - Returns: log_return_1
-- Volatility: realized_vol_4, realized_vol_13 (return-based, improves WQL interval calibration)
+- Volatility: realized_vol_4/13/26/52, vol_ratio_4_13
 - Seasonal: yoy_change (52-week pct_change)
 - Regime: range_position_52 (price position within 52-week high/low [0,1])
-- Oscillator: rsi_14 (14-week RSI, overbought/oversold signal)
+- Oscillator: rsi_14 (14-week RSI)
+- Acceleration: acceleration_4/13, momentum_divergence (second derivative of trend)
+- FX dynamics: usd_momentum_13, fx_adjusted_return_4, boi_usd_momentum_13 (if USD/BOI_USD columns present)
+- Cattle cycle: bezerro_momentum_13/26, ratio_momentum_13/26, ratio_range_position_52 (if BEZERRO columns present)
 
 ## Key Directories
 
-- `data/` - Input: CEPEA spreadsheet (newest file by mtime is used)
+- `data/` - Input: CEPEA_BOI.xls (required) + CEPEA_BEZERRO.xls (optional), matched by name
 - `artifacts/models/` - Trained AutoGluon models + metadata.json per model
 - `artifacts/predictions/` - latest_forecast.csv
 - `output/pdf/` - latest_forecast_report.pdf
@@ -57,7 +63,7 @@ All output directories (`artifacts/`, `output/`, `tmp/`) are gitignored. `data/`
 
 ## Development Workflow
 
-- Preset is `best_quality` for production; `AUTOGLUON_HYPERPARAMETERS` in config.py lists all 18 models explicitly
+- Preset is `best_quality` for production; `AUTOGLUON_HYPERPARAMETERS` in config.py lists all 27 models explicitly
 - `TRAINING_TIME_LIMIT` in config.py controls max training time (default None = unlimited)
 - Eval metric: WQL (Weighted Quantile Loss) for probabilistic forecast quality
 
@@ -73,9 +79,9 @@ All output directories (`artifacts/`, `output/`, `tmp/`) are gitignored. `data/`
 - LOKY_MAX_CPU_COUNT set to physical cores on macOS (via sysctl hw.physicalcpu)
 - `known_covariates` must be provided at predict time via `build_future_known_covariates()`
 - Pretrained models (Chronos) download weights on first use (~1GB); first training requires internet
-- Training 18 models with `best_quality` takes 30-60+ min; set `TRAINING_TIME_LIMIT` in config.py to cap it
+- Training 27 models with `best_quality` takes 30-60+ min; set `TRAINING_TIME_LIMIT` in config.py to cap it
 - AutoGluon import is very slow (~3 min); tests that touch forecasting.py take ~3 min total
-- Config constant is `DEFAULT_AUTOGUON_PRESET` (typo of AUTOGLUON) — used in config.py:6, forecasting.py:10,163; do not rename without updating all 3 references
+- Config constant is `DEFAULT_AUTOGUON_PRESET` (typo of AUTOGLUON) — used in config.py, forecasting.py (import + train_model default); do not rename without updating all references
 
 ## Dependencies
 
