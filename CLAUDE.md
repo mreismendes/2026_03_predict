@@ -32,11 +32,18 @@ pytest -k "not forecasting and not reporting and not pipeline"              # sa
 
 ## Feature Engineering
 
-**Known covariates** (available for future, passed to predict):
-- month, quarter, week_of_year
+**Known covariates** (deterministic, available for future via Fourier decomposition):
+- sin_yearly_1..4, cos_yearly_1..4 (smooth yearly seasonality, replaces integer week_of_year)
 
 **Past covariates** (history only, auto-detected by AutoGluon):
-- rolling_mean_4, rolling_mean_13, rolling_std_4, momentum_4
+- Trend: rolling_mean_4, rolling_mean_13, rolling_mean_26
+- Momentum: momentum_4, momentum_13, momentum_26
+- MA crossover: ma_ratio_4_13, ma_ratio_4_26
+- Returns: log_return_1
+- Volatility: realized_vol_4, realized_vol_13 (return-based, improves WQL interval calibration)
+- Seasonal: yoy_change (52-week pct_change)
+- Regime: range_position_52 (price position within 52-week high/low [0,1])
+- Oscillator: rsi_14 (14-week RSI, overbought/oversold signal)
 
 ## Key Directories
 
