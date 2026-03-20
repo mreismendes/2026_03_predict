@@ -6,6 +6,7 @@ from pathlib import Path
 DEFAULT_AUTOGUON_PRESET = "best_quality"
 WEEKLY_FORECAST_LENGTH = 52
 TRAINING_TIME_LIMIT: int | None = None
+QUANTILE_LEVELS: list[float] = [0.1, 0.5, 0.9]
 
 AUTOGLUON_HYPERPARAMETERS: dict[str, dict] = {
     # Baseline

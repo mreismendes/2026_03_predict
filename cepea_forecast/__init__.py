@@ -6,5 +6,6 @@ __all__ = [
     "features",
     "forecasting",
     "pipeline",
+    "recalibration",
     "reporting",
 ]

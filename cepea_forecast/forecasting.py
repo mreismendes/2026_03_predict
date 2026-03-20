@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,10 +11,13 @@ import pandas as pd
 from cepea_forecast.config import (
     AUTOGLUON_HYPERPARAMETERS,
     DEFAULT_AUTOGUON_PRESET,
+    QUANTILE_LEVELS,
     TRAINING_TIME_LIMIT,
     WEEKLY_FORECAST_LENGTH,
 )
 from cepea_forecast.features import build_future_known_covariates, known_covariates_for
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -160,7 +164,7 @@ def train_model(
         freq=spec.frequency,
         target="target",
         known_covariates_names=list(spec.known_covariates_names) if spec.known_covariates_names else None,
-        quantile_levels=[0.1, 0.5, 0.9],
+        quantile_levels=QUANTILE_LEVELS,
         eval_metric="WQL",
         eval_metric_seasonal_period=spec.seasonal_period,
         verbosity=2,
@@ -179,6 +183,18 @@ def train_model(
     if time_limit is not None:
         fit_kwargs["time_limit"] = time_limit
     predictor.fit(**fit_kwargs)
+
+    # --- Per-horizon quantile recalibration via isotonic regression ---
+    from cepea_forecast.recalibration import fit_recalibrators, save_calibration
+
+    logger.info("Fitting per-horizon quantile recalibrators from backtest residuals ...")
+    calib_bundle = fit_recalibrators(
+        predictor=predictor,
+        train_data=train_data,
+        prediction_length=spec.prediction_length,
+        known_covariates_names=list(spec.known_covariates_names) if spec.known_covariates_names else None,
+    )
+    save_calibration(calib_bundle, model_dir)
 
     metadata = {
         "model_id": spec.model_id,
@@ -298,6 +314,17 @@ def forecast_model(
 
     forecast = predictor.predict(data, known_covariates=known_covariates)
     forecast_frame = normalize_forecast_frame(forecast)
+
+    # Apply quantile recalibration if calibrators are available
+    from cepea_forecast.recalibration import apply_recalibration, load_calibration
+
+    calib_bundle = load_calibration(model_dir)
+    if calib_bundle is not None:
+        logger.info("Applying per-horizon quantile recalibration (%d models)", calib_bundle.n_models)
+        forecast_frame = apply_recalibration(forecast_frame, calib_bundle)
+    else:
+        logger.info("No calibration bundle found, using raw quantile forecasts")
+
     rows = forecast_to_rows(
         forecast_frame=forecast_frame,
         spec=spec,
