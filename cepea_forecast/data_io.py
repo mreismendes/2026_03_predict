@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 SUPPORTED_SUFFIXES = {".xls", ".xlsx", ".csv"}
+TARGET_COLUMN = "BOI_BRL"
 
 
 @dataclass(frozen=True)
@@ -16,13 +17,28 @@ class LoadedSourceData:
     covariate_labels: dict[str, str]
 
 
-def find_latest_data_file(data_dir: Path) -> Path | None:
+def _find_file(data_dir: Path, pattern: str) -> Path | None:
+    """Find a file in data_dir whose stem contains the pattern (case-insensitive)."""
+    pattern_lower = pattern.lower()
+    for path in data_dir.iterdir():
+        if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES and pattern_lower in path.stem.lower():
+            return path
+    return None
+
+
+def find_data_files(data_dir: Path) -> tuple[Path, Path | None]:
+    """Find BOI (required) and BEZERRO (optional) data files in the directory."""
     if not data_dir.exists():
-        return None
-    files = [path for path in data_dir.iterdir() if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES]
-    if not files:
-        return None
-    return max(files, key=lambda path: path.stat().st_mtime)
+        raise FileNotFoundError(f"Data directory does not exist: {data_dir}")
+
+    boi_file = _find_file(data_dir, "BOI")
+    if boi_file is None:
+        raise FileNotFoundError(
+            f"No BOI data file found in {data_dir}. Expected a file with 'BOI' in its name."
+        )
+
+    bezerro_file = _find_file(data_dir, "BEZERRO")
+    return boi_file, bezerro_file
 
 
 def _read_table(path: Path, header_row: int) -> pd.DataFrame:
@@ -49,79 +65,74 @@ def _coerce_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(cleaned, errors="coerce")
 
 
-def _coerce_categorical(series: pd.Series) -> pd.Series:
-    values = series.copy()
-    values = values.where(~pd.isna(values), pd.NA)
-    values = values.astype("string").str.strip()
-    values = values.replace({"": pd.NA, "nan": pd.NA, "None": pd.NA, "<NA>": pd.NA})
-    return values
-
-
-def _make_covariate_name(position: int, used_names: set[str]) -> str:
-    name = f"covariate_{position}"
-    while name in used_names:
-        position += 1
-        name = f"covariate_{position}"
-    return name
-
-
-def load_source_data(path: Path) -> LoadedSourceData:
-    read_errors: list[str] = []
+def _load_single_file(path: Path) -> pd.DataFrame:
+    """Load a single data file, returning a DataFrame with parsed date index and numeric columns."""
     for header_row in range(5):
         try:
             frame = _read_table(path, header_row)
         except ImportError as exc:
             raise RuntimeError(f"Missing reader dependency for {path.suffix}: {exc}") from exc
-        except Exception as exc:  # pragma: no cover - captured for fallback diagnostics
-            read_errors.append(f"header={header_row}: {exc}")
+        except Exception:
             continue
 
         frame = frame.dropna(axis=1, how="all").dropna(axis=0, how="all")
-        if frame.empty:
+        if frame.empty or frame.shape[1] < 2:
             continue
 
-        if frame.shape[1] < 2:
-            continue
-
-        original_columns = list(frame.columns)
         date_series = pd.to_datetime(frame.iloc[:, 0], dayfirst=True, errors="coerce")
-        target_series = _coerce_numeric(frame.iloc[:, 1])
-        date_score = float(date_series.notna().mean())
-        target_score = float(target_series.notna().mean())
-        if date_score < 0.6 or target_score < 0.6:
+        if float(date_series.notna().mean()) < 0.6:
             continue
 
-        data = pd.DataFrame({"date": date_series, "target": target_series})
-        covariate_names: list[str] = []
-        covariate_labels: dict[str, str] = {}
-        used_names = {"date", "target"}
-        for position, original_name in enumerate(original_columns[2:], start=1):
-            internal_name = _make_covariate_name(position, used_names)
-            used_names.add(internal_name)
-            raw_series = frame[original_name]
-            numeric_series = _coerce_numeric(raw_series)
-            numeric_score = float(numeric_series.notna().mean())
-            if numeric_score >= 0.6:
-                covariate_series = numeric_series.astype(float)
-            else:
-                covariate_series = _coerce_categorical(raw_series)
-            data[internal_name] = covariate_series
-            covariate_names.append(internal_name)
-            covariate_labels[internal_name] = str(original_name).strip() or internal_name
+        result = pd.DataFrame({"date": date_series})
+        for col in frame.columns[1:]:
+            numeric = _coerce_numeric(frame[col])
+            if float(numeric.notna().mean()) >= 0.6:
+                result[str(col).strip()] = numeric.astype(float)
 
-        data = data.dropna(subset=["date", "target"]).sort_values("date").drop_duplicates(subset=["date"], keep="last")
-        if not data.empty:
-            target_name = str(original_columns[1]).strip() or "target"
-            return LoadedSourceData(
-                frame=data.reset_index(drop=True),
-                target_name=target_name,
-                covariate_names=covariate_names,
-                covariate_labels=covariate_labels,
-            )
+        result = result.dropna(subset=["date"]).sort_values("date").drop_duplicates(subset=["date"], keep="last")
+        if not result.empty:
+            return result.reset_index(drop=True)
 
-    details = "; ".join(read_errors) if read_errors else "no readable header row produced a valid date/target mapping"
-    raise ValueError(f"Could not parse source data from {path}: {details}")
+    raise ValueError(f"Could not parse data from {path}")
 
 
-def load_daily_series(path: Path) -> pd.DataFrame:
-    return load_source_data(path).frame
+def load_source_data(data_dir: Path) -> LoadedSourceData:
+    """Load BOI and BEZERRO files from data_dir, merge on date, return unified frame.
+
+    BOI_BRL is the target column. All other numeric columns are past covariates.
+    BEZERRO data is joined on date; dates only in BEZERRO (not in BOI) are dropped.
+    """
+    boi_path, bezerro_path = find_data_files(data_dir)
+
+    boi = _load_single_file(boi_path)
+    if TARGET_COLUMN not in boi.columns:
+        raise ValueError(f"BOI file missing target column '{TARGET_COLUMN}'. Found: {list(boi.columns)}")
+
+    if bezerro_path is not None:
+        bezerro = _load_single_file(bezerro_path)
+        # Prefix BEZERRO columns to avoid name collisions (except date)
+        bezerro_cols = {col: col for col in bezerro.columns if col != "date"}
+        merged = boi.merge(bezerro, on="date", how="left", suffixes=("", "_bez"))
+    else:
+        merged = boi
+
+    # Derived feature: BOI/BEZERRO price ratio (spread indicator)
+    if "BRL_KG" in merged.columns:
+        merged["BOI_BEZERRO_RATIO"] = merged[TARGET_COLUMN] / merged["BRL_KG"]
+
+    # Build target + covariates
+    covariate_names = [col for col in merged.columns if col not in ("date", TARGET_COLUMN)]
+    covariate_labels = {col: col for col in covariate_names}
+
+    frame = pd.DataFrame({"date": merged["date"], "target": merged[TARGET_COLUMN]})
+    for col in covariate_names:
+        frame[col] = merged[col]
+
+    frame = frame.dropna(subset=["date", "target"]).sort_values("date").drop_duplicates(subset=["date"], keep="last")
+
+    return LoadedSourceData(
+        frame=frame.reset_index(drop=True),
+        target_name=TARGET_COLUMN,
+        covariate_names=covariate_names,
+        covariate_labels=covariate_labels,
+    )

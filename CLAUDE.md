@@ -20,7 +20,7 @@ pytest -k "not forecasting and not reporting and not pipeline"              # sa
 - `forecast_cli.py` - Entry point; auto-activates .venv, sets MPLCONFIGDIR/LOKY_MAX_CPU_COUNT
 - `cepea_forecast/cli.py` - Argparse CLI (predict | retrain)
 - `cepea_forecast/config.py` - Path layout (AppPaths), forecast lengths, preset (currently `fast_training` for dev)
-- `cepea_forecast/data_io.py` - Reads .xls/.xlsx/.csv, auto-detects header row (tries 0-4), parses date+target+covariates
+- `cepea_forecast/data_io.py` - Loads CEPEA_BOI + CEPEA_BEZERRO files, merges on date (left join), BOI_BRL is target
 - `cepea_forecast/features.py` - Feature engineering: calendar known covariates + rolling/lag past covariates
 - `cepea_forecast/forecasting.py` - AutoGluon training/prediction with known_covariates, MODEL_SPECS, aggregation
 - `cepea_forecast/pipeline.py` - Orchestrates data loading, feature engineering, training, forecasting, PDF generation
@@ -28,7 +28,7 @@ pytest -k "not forecasting and not reporting and not pipeline"              # sa
 
 ## Data Flow
 
-`data/*.xls` -> load_source_data (daily) -> aggregate weekly (W-FRI) -> engineer_features (calendar + lag) -> AutoGluon train/predict -> CSV + PDF
+`data/CEPEA_BOI.xls` + `data/CEPEA_BEZERRO.xls` -> merge on date (left join) -> aggregate weekly (W-FRI) -> engineer_features (Fourier + lag) -> AutoGluon train/predict -> CSV + PDF
 
 ## Feature Engineering
 
@@ -63,7 +63,8 @@ All output directories (`artifacts/`, `output/`, `tmp/`) are gitignored. `data/`
 
 ## Gotchas
 
-- Data file is auto-selected by newest modification time in `data/` - only .xls/.xlsx/.csv supported
+- Data files must be named with `BOI` and `BEZERRO` in the filename (e.g., `CEPEA_BOI.xls`, `CEPEA_BEZERRO.xls`)
+- BOI is required, BEZERRO is optional; merged via left join on date (BEZERRO NaN for dates before 2000)
 - `predict` auto-trains if any model is missing (checks metadata.json existence)
 - Weekly aggregation uses W-FRI (Friday end), drops incomplete trailing period
 - Numeric covariate detection threshold: 60% non-null after coercion
