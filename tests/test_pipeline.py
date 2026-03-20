@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from cepea_forecast.pipeline import predict
+from cepea_forecast.pipeline import run
 
 
-def test_predict_trains_missing_models_and_writes_output(tmp_path: Path, monkeypatch) -> None:
+def test_run_trains_and_predicts(tmp_path: Path, monkeypatch) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     boi = data_dir / "CEPEA_BOI.csv"
@@ -111,7 +111,7 @@ def test_predict_trains_missing_models_and_writes_output(tmp_path: Path, monkeyp
     monkeypatch.setattr("cepea_forecast.pipeline.forecast_model", fake_forecast_model)
     monkeypatch.setattr("cepea_forecast.pipeline.generate_forecast_report", fake_generate_report)
 
-    result = predict(base_dir=tmp_path)
+    result = run(base_dir=tmp_path)
 
     assert len(trained) == 1
     assert all(record[2] == "BOI_BRL" for record in trained)
