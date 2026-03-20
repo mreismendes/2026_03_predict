@@ -8,7 +8,7 @@ from cepea_forecast.pipeline import PipelineResult, predict, retrain
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="CEPEA weekly/monthly forecasting CLI")
+    parser = argparse.ArgumentParser(description="CEPEA weekly forecasting CLI")
     parser.add_argument("command", choices=["predict", "retrain"], help="Command to execute")
     parser.add_argument("--base-dir", default=".", help="Project root containing data/ and artifacts/")
     return parser

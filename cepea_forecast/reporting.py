@@ -141,7 +141,7 @@ def generate_forecast_report(output_path: Path, bundles: list[ForecastBundle], s
                 f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br/>"
                 f"Target series: {bundles[0].metadata.get('target_column', 'Target')}<br/>"
                 f"Past covariates available: {bundles[0].metadata.get('covariate_count', '0')}<br/>"
-                "Aggregation: closed weekly mean (W-FRI) and closed monthly mean for numeric columns."
+                "Aggregation: closed weekly mean (W-FRI) for numeric columns."
             ),
             body_style,
         ),
