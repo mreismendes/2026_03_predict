@@ -87,6 +87,43 @@ def add_lag_features(df: pd.DataFrame, granularity: str) -> pd.DataFrame:
         )
         out["rsi_14"] = rsi.where(rsi.notna(), fallback)
 
+        # --- Long-horizon volatility (improves WQL at steps 26-52) ---
+        out["realized_vol_26"] = log_ret.rolling(26, min_periods=8).std()
+        out["realized_vol_52"] = log_ret.rolling(52, min_periods=16).std()
+        out["vol_ratio_4_13"] = out["realized_vol_4"] / out["realized_vol_13"]
+
+        # --- Acceleration (second derivative of trend) ---
+        out["acceleration_4"] = out["momentum_4"] - out["momentum_4"].shift(4)
+        out["acceleration_13"] = out["momentum_13"] - out["momentum_13"].shift(13)
+        out["momentum_divergence"] = out["momentum_4"] - out["momentum_13"]
+
+        # --- Cross-asset: FX features (if USD column present) ---
+        if "USD" in out.columns:
+            usd = out["USD"]
+            out["usd_momentum_13"] = usd.pct_change(13)
+            out["fx_adjusted_return_4"] = target.pct_change(4) - usd.pct_change(4)
+        if "BOI_USD" in out.columns:
+            out["boi_usd_momentum_13"] = out["BOI_USD"].pct_change(13)
+
+        # --- Cross-asset: Bezerro cycle features (if BRL_KG column present) ---
+        if "BRL_KG" in out.columns:
+            brl_kg = out["BRL_KG"]
+            out["bezerro_momentum_13"] = brl_kg.pct_change(13)
+            out["bezerro_momentum_26"] = brl_kg.pct_change(26)
+        if "BOI_BEZERRO_RATIO" in out.columns:
+            ratio = out["BOI_BEZERRO_RATIO"]
+            out["ratio_momentum_13"] = ratio.pct_change(13)
+            out["ratio_momentum_26"] = ratio.pct_change(26)
+            # Range position of the spread within its 52-week band
+            ratio_high = ratio.rolling(52, min_periods=1).max()
+            ratio_low = ratio.rolling(52, min_periods=1).min()
+            ratio_range = ratio_high - ratio_low
+            out["ratio_range_position_52"] = np.where(
+                ratio_range > 0,
+                (ratio - ratio_low) / ratio_range,
+                0.5,
+            )
+
     return out
 
 
