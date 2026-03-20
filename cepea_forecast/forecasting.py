@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from cepea_forecast.config import DEFAULT_AUTOGUON_PRESET, WEEKLY_FORECAST_LENGTH
+from cepea_forecast.config import (
+    AUTOGLUON_HYPERPARAMETERS,
+    DEFAULT_AUTOGUON_PRESET,
+    TRAINING_TIME_LIMIT,
+    WEEKLY_FORECAST_LENGTH,
+)
 from cepea_forecast.features import build_future_known_covariates, known_covariates_for
 
 
@@ -129,6 +134,8 @@ def train_model(
     covariate_names: list[str],
     covariate_labels: dict[str, str],
     preset_name: str = DEFAULT_AUTOGUON_PRESET,
+    hyperparameters: dict[str, dict] | None = AUTOGLUON_HYPERPARAMETERS,
+    time_limit: int | None = TRAINING_TIME_LIMIT,
 ) -> dict[str, str]:
     _, TimeSeriesPredictor = _autogluon_modules()
     if model_dir.exists():
@@ -159,7 +166,7 @@ def train_model(
         verbosity=2,
     )
     train_data = build_timeseries_frame(aggregated, spec.item_id)
-    predictor.fit(
+    fit_kwargs: dict = dict(
         train_data=train_data,
         presets=preset_name,
         verbosity=2,
@@ -167,6 +174,11 @@ def train_model(
         refit_every_n_windows=1,
         refit_full=True,
     )
+    if hyperparameters is not None:
+        fit_kwargs["hyperparameters"] = hyperparameters
+    if time_limit is not None:
+        fit_kwargs["time_limit"] = time_limit
+    predictor.fit(**fit_kwargs)
 
     metadata = {
         "model_id": spec.model_id,
@@ -183,7 +195,8 @@ def train_model(
         "source_file": str(source_file),
         "data_status": data_status,
         "preset": preset_name,
-        "model_family": f"{preset_name} preset default models",
+        "model_family": json.dumps(list(hyperparameters.keys())) if hyperparameters else f"{preset_name} preset default models",
+        "time_limit": str(time_limit) if time_limit is not None else "unlimited",
         "num_val_windows": str(num_val_windows),
         "model_trained_at": pd.Timestamp.now(tz="UTC").isoformat(),
         "last_period_end": str(aggregated.index.max().date()),

@@ -5,6 +5,43 @@ from pathlib import Path
 
 DEFAULT_AUTOGUON_PRESET = "best_quality"
 WEEKLY_FORECAST_LENGTH = 52
+TRAINING_TIME_LIMIT: int | None = None
+
+AUTOGLUON_HYPERPARAMETERS: dict[str, dict] = {
+    # Baseline
+    "Naive": {},
+    "SeasonalNaive": {},
+    "Average": {},
+    "SeasonalAverage": {},
+    "Zero": {},
+    # Statistical
+    "ETS": {},
+    "AutoARIMA": {},
+    "AutoETS": {},
+    "AutoCES": {},
+    "Theta": {},
+    "NPTS": {},
+    # Statistical - sparse data
+    "ADIDA": {},
+    "Croston": {},
+    "IMAPA": {},
+    # Deep Learning
+    "DeepAR": {},
+    "DLinear": {},
+    "PatchTST": {},
+    "SimpleFeedForward": {},
+    "TemporalFusionTransformer": {},
+    "TiDE": {},
+    "WaveNet": {},
+    # Tabular
+    "DirectTabular": {},
+    "PerStepTabular": {},
+    "RecursiveTabular": {},
+    # Pretrained
+    "Chronos2": {},
+    "Chronos": {},
+    "Toto": {},
+}
 
 
 @dataclass(frozen=True)
