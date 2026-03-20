@@ -189,9 +189,15 @@ def train_model(
         "internal_target_column": "target",
         "known_covariates": json.dumps(list(spec.known_covariates_names)),
         "covariate_type": "known+past",
-        "covariate_count": str(len(covariate_names)),
-        "covariate_columns": json.dumps(covariate_names),
+        "source_covariate_count": str(len(covariate_names)),
+        "source_covariate_columns": json.dumps(covariate_names),
         "covariate_labels": json.dumps(covariate_labels, ensure_ascii=False, sort_keys=True),
+        "past_covariates": json.dumps(
+            [c for c in aggregated.columns if c != "target" and c not in (spec.known_covariates_names or ())]
+        ),
+        "covariate_count": str(
+            len([c for c in aggregated.columns if c != "target" and c not in (spec.known_covariates_names or ())])
+        ),
         "source_file": str(source_file),
         "data_status": data_status,
         "preset": preset_name,
