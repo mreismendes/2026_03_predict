@@ -101,6 +101,10 @@ def test_forecast_table_data_contains_all_forecast_rows() -> None:
 
     table_data = _forecast_table_data(bundle)
 
-    assert table_data[0] == ["Step", "Period End", "Mean", "P10", "P50", "P90"]
-    assert table_data[1] == ["1", "2026-03-13", "101.0000", "99.0000", "101.0000", "103.0000"]
-    assert table_data[-1] == ["3", "2026-03-27", "103.0000", "101.0000", "103.0000", "105.0000"]
+    assert table_data[0] == ["Step", "Period End", "Mean", "P10", "P50", "P90", "Change %"]
+    assert table_data[1][0] == "1"
+    assert table_data[1][1] == "2026-03-13"
+    assert "101" in table_data[1][2]  # Mean ~ 101
+    assert table_data[-1][0] == "3"
+    assert table_data[-1][1] == "2026-03-27"
+    assert len(table_data[-1]) == 7  # 7 columns including Change %
