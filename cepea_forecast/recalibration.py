@@ -6,8 +6,9 @@ Workflow
    rolling-origin backtesting via ``predictor.backtest_predictions()`` /
    ``predictor.backtest_targets()`` to collect (predicted_quantile, actual)
    pairs for every (quantile_level, forecast_step) combination.
-2. For each of the 3 x 52 = 156 combinations an ``IsotonicRegression`` is
-   fitted that maps *predicted quantile value* -> *recalibrated quantile value*.
+2. Data is POOLED across all steps per quantile level, fitting just 3
+   ``IsotonicRegression`` models (one per quantile) with ~1,000+ samples each.
+   This avoids the overfitting/oscillation that occurs with 156 per-step models.
 3. At production time, ``apply_recalibration`` takes the raw forecast DataFrame
    and returns a corrected copy with monotonicity enforced (q0.1 <= q0.5 <= q0.9).
 4. The fitted calibrators are persisted alongside the model as a single pickle file.
@@ -40,11 +41,12 @@ CALIBRATION_FILENAME = "quantile_calibrators.pkl"
 
 @dataclass
 class CalibrationBundle:
-    """Container for 156 fitted IsotonicRegression models.
+    """Container for fitted IsotonicRegression models (3 pooled, stored per step).
 
     Layout: ``models[(quantile_col, step)] = IsotonicRegression``
     where *quantile_col* is one of ``"0.1"``, ``"0.5"``, ``"0.9"`` and
-    *step* is 1-based (1 .. prediction_length).
+    *step* is 1-based (1 .. prediction_length). All steps for the same
+    quantile share the same pooled IsotonicRegression instance.
     """
 
     prediction_length: int
@@ -186,45 +188,26 @@ def fit_recalibrators(
     known_covariates_names: list[str] | None = None,
     num_val_windows: int | None = None,
 ) -> CalibrationBundle:
-    """Fit per-horizon quantile recalibration models from backtest residuals.
+    """Fit pooled quantile recalibration models from backtest residuals.
 
-    Parameters
-    ----------
-    predictor
-        A trained ``TimeSeriesPredictor``.
-    train_data
-        The full training ``TimeSeriesDataFrame`` (same as passed to ``fit``).
-    prediction_length
-        Number of forecast steps (e.g. 52 for weekly).
-    known_covariates_names
-        Column names of known covariates (passed through for future use).
-    num_val_windows
-        How many rolling origins to use.  More windows = more calibration
-        data but slower.  **Recommendation**: use as many as the data allows.
+    Instead of fitting 156 per-(quantile, step) models (which overfit with
+    ~20 samples each), this pools ALL steps together and fits just 3 models
+    (one per quantile level). Each model gets ~20 windows x 52 steps ≈ 1,000+
+    data points, producing smooth, consistent recalibration across the horizon.
 
-        Rule of thumb for ~1,495 weekly points with prediction_length=52:
-        ``(1495 - 2*52) / 52 ≈ 26`` usable windows.  Using 20 is a safe
-        default that leaves ample training history for even the first window.
-
-        If ``None``, defaults to ``min(20, (len - 2*pl) // pl)``.
-
-    Returns
-    -------
-    CalibrationBundle
-        Container with 156 fitted IsotonicRegression models (or fewer if
-        some cells had too few observations).
+    The same pooled model is then stored for every step, so apply_recalibration
+    works unchanged.
     """
     if num_val_windows is None:
-        # Estimate a safe number of windows
         try:
             n_rows = len(train_data)
         except TypeError:
-            n_rows = 1500  # fallback
+            n_rows = 1500
         max_windows = max(1, (n_rows - 2 * prediction_length) // prediction_length)
-        num_val_windows = min(20, max_windows)
+        num_val_windows = min(26, max_windows)
 
     logger.info(
-        "Collecting backtest pairs: %d windows x %d steps x %d quantiles",
+        "Collecting backtest pairs: %d windows x %d steps x %d quantiles (pooled)",
         num_val_windows,
         prediction_length,
         len(QUANTILE_LEVELS),
@@ -243,31 +226,41 @@ def fit_recalibrators(
         n_origins=num_val_windows,
     )
 
-    min_samples = float("inf")
-    fitted_count = 0
+    # Pool all steps for each quantile level → 3 models instead of 156
+    for q_col in QUANTILE_LEVELS:
+        pooled_pred: list[float] = []
+        pooled_actual: list[float] = []
+        for step in range(1, prediction_length + 1):
+            pred_vals, act_vals = pairs.get((q_col, step), ([], []))
+            pooled_pred.extend(pred_vals)
+            pooled_actual.extend(act_vals)
 
-    for (q_col, step), (pred_vals, act_vals) in pairs.items():
         q_level = float(q_col)
-        iso = _fit_single_isotonic(pred_vals, act_vals, q_level)
+        iso = _fit_single_isotonic(pooled_pred, pooled_actual, q_level)
         if iso is not None:
-            bundle.models[(q_col, step)] = iso
-            fitted_count += 1
-            min_samples = min(min_samples, len(pred_vals))
+            # Store the SAME pooled model for every step (smooth, consistent)
+            for step in range(1, prediction_length + 1):
+                bundle.models[(q_col, step)] = iso
+            logger.info(
+                "Fitted pooled calibrator for q=%s: %d samples",
+                q_col, len(pooled_pred),
+            )
         else:
             logger.warning(
-                "Skipping calibrator for q=%s step=%d: only %d samples",
-                q_col,
-                step,
-                len(pred_vals),
+                "Skipping calibrator for q=%s: only %d pooled samples",
+                q_col, len(pooled_pred),
             )
 
-    bundle.min_samples_per_cell = int(min_samples) if min_samples != float("inf") else 0
+    bundle.min_samples_per_cell = min(
+        (len(pairs.get((q, 1), ([], []))[0]) for q in QUANTILE_LEVELS),
+        default=0,
+    )
 
     logger.info(
-        "Fitted %d / %d calibrators (min %d samples per cell)",
-        fitted_count,
-        len(QUANTILE_LEVELS) * prediction_length,
-        bundle.min_samples_per_cell,
+        "Fitted %d calibrators (3 pooled models x %d steps, %d total samples per quantile)",
+        bundle.n_models,
+        prediction_length,
+        sum(len(pairs.get((QUANTILE_LEVELS[0], s), ([], []))[0]) for s in range(1, prediction_length + 1)),
     )
 
     return bundle
