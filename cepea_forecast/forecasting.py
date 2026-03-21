@@ -187,7 +187,7 @@ def train_model(
     # --- Per-horizon quantile recalibration via isotonic regression ---
     from cepea_forecast.recalibration import fit_recalibrators, save_calibration
 
-    logger.info("Fitting per-horizon quantile recalibrators from backtest residuals ...")
+    print("Fitting per-horizon quantile recalibrators from backtest residuals ...")
     calib_bundle = fit_recalibrators(
         predictor=predictor,
         train_data=train_data,
@@ -195,6 +195,7 @@ def train_model(
         known_covariates_names=list(spec.known_covariates_names) if spec.known_covariates_names else None,
     )
     save_calibration(calib_bundle, model_dir)
+    print(f"Recalibration complete: {calib_bundle.n_models} isotonic models fitted and saved.")
 
     metadata = {
         "model_id": spec.model_id,
@@ -317,10 +318,10 @@ def forecast_model(
 
     calib_bundle = load_calibration(model_dir)
     if calib_bundle is not None:
-        logger.info("Applying per-horizon quantile recalibration (%d models)", calib_bundle.n_models)
+        print(f"Applying per-horizon quantile recalibration ({calib_bundle.n_models} models)")
         forecast_frame = apply_recalibration(forecast_frame, calib_bundle)
     else:
-        logger.info("No calibration bundle found, using raw quantile forecasts")
+        print("No calibration bundle found, using raw quantile forecasts")
 
     rows = forecast_to_rows(
         forecast_frame=forecast_frame,
