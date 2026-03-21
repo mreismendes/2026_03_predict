@@ -49,6 +49,13 @@ pytest -k "not forecasting and not reporting and not pipeline"              # sa
 - Acceleration: acceleration_4/13, momentum_divergence (second derivative of trend)
 - FX dynamics: usd_momentum_13, fx_adjusted_return_4, boi_usd_momentum_13 (if USD/BOI_USD columns present)
 - Cattle cycle: bezerro_momentum_13/26, ratio_momentum_13/26, ratio_range_position_52 (if BEZERRO columns present)
+- Long-memory (FFD): ffd_boi_brl, ffd_boi_usd, ffd_brl_kg (fractional differencing preserving memory structure; conditional on column presence; ADF-based optimal d*, max window 52)
+- GARCH regime: garch_cond_var (GARCH(1,1) conditional variance), gjr_asymmetry (GJR/GARCH conditional variance ratio — leverage effect measure; arch library)
+- Markov regime: ms_high_vol_prob (2-state Markov Switching smoothed probability of high-volatility state; statsmodels)
+- Persistence: hurst_52 (52-week rolling Hurst exponent via R/S analysis; H>0.5=trending, H<0.5=mean-reverting)
+- Predictability: sample_entropy_52 (rolling 52-week sample entropy on log returns; m=2, r=0.2×std)
+- Nonlinear causality: te_bezerro_to_boi, te_boi_to_bezerro, te_usd_to_boi, te_boi_to_usd (rolling 52-week transfer entropy; conditional on column presence)
+- Dynamic correlation: dcc_corr_boi_usd, dcc_corr_dev_boi_usd, dcc_corr_boi_bezerro, dcc_corr_dev_boi_bezerro (EWMA correlation halflife=26 + deviation from expanding mean; conditional on column presence)
 
 ## Key Directories
 
@@ -84,4 +91,4 @@ All output directories (`artifacts/`, `output/`, `tmp/`) are gitignored. `data/`
 
 ## Dependencies
 
-Python 3.11 | autogluon.timeseries, pandas, xlrd, openpyxl, python-dateutil, reportlab, matplotlib, pytest
+Python 3.11 | autogluon.timeseries, pandas, xlrd, openpyxl, python-dateutil, reportlab, matplotlib, scikit-learn, arch, statsmodels, pytest

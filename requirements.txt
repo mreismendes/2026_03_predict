@@ -6,3 +6,5 @@ python-dateutil
 reportlab
 scikit-learn
 pytest
+arch
+statsmodels
