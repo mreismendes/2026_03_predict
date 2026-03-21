@@ -17,7 +17,7 @@ pytest -k "not forecasting and not reporting and not pipeline"              # sa
 ## Architecture
 
 - `forecast_cli.py` - Entry point; auto-activates .venv, sets MPLCONFIGDIR/LOKY_MAX_CPU_COUNT
-- `cepea_forecast/cli.py` - Argparse CLI (predict | retrain)
+- `cepea_forecast/cli.py` - Argparse CLI (--base-dir), calls pipeline.run()
 - `cepea_forecast/config.py` - Path layout (AppPaths), forecast lengths, preset, AUTOGLUON_HYPERPARAMETERS (27 models)
 - `cepea_forecast/data_io.py` - Loads CEPEA_BOI + CEPEA_BEZERRO files, merges on date (left join), BOI_BRL is target
 - `cepea_forecast/features.py` - Feature engineering: calendar known covariates + rolling/lag past covariates
@@ -70,7 +70,7 @@ All output directories (`artifacts/`, `output/`, `tmp/`) are gitignored. `data/`
 
 - Data files must be named with `BOI` and `BEZERRO` in the filename (e.g., `CEPEA_BOI.xls`, `CEPEA_BEZERRO.xls`)
 - BOI is required, BEZERRO is optional; merged via left join on date (BEZERRO NaN for dates before 2000)
-- `predict` auto-trains if any model is missing (checks metadata.json existence)
+- `run()` always retrains from scratch then predicts — no conditional skip
 - Weekly aggregation uses W-FRI (Friday end), drops incomplete trailing period
 - Numeric covariate detection threshold: 60% non-null after coercion
 - Brazilian number format handled: strips R$, resolves comma/dot ambiguity
