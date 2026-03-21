@@ -41,6 +41,7 @@ class ForecastBundle:
     source_file: Path
     model_dir: Path
     metadata: dict[str, str]
+    raw_forecast_frame: pd.DataFrame | None = None
 
 
 MODEL_SPECS = {
@@ -322,6 +323,7 @@ def forecast_model(
 
     forecast = predictor.predict(data, known_covariates=known_covariates)
     forecast_frame = normalize_forecast_frame(forecast)
+    raw_forecast_frame = forecast_frame.copy()
 
     # Apply quantile recalibration if calibrators are available
     from cepea_forecast.recalibration import apply_recalibration, load_calibration
@@ -349,4 +351,5 @@ def forecast_model(
         source_file=source_file,
         model_dir=model_dir,
         metadata=metadata,
+        raw_forecast_frame=raw_forecast_frame,
     )
