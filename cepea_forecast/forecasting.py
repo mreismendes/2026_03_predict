@@ -239,9 +239,6 @@ def write_metadata(model_dir: Path, metadata: dict[str, str]) -> None:
     metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True, ensure_ascii=False), encoding="utf-8")
 
 
-def model_ready(model_dir: Path) -> bool:
-    return model_dir.exists() and (model_dir / "metadata.json").exists()
-
 
 def load_predictor(model_dir: Path):
     _, TimeSeriesPredictor = _autogluon_modules()

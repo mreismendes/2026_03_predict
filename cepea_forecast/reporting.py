@@ -117,9 +117,7 @@ def _categorize_past_covariates(covariates: list[str]) -> dict[str, list[str]]:
 def _build_executive_summary(
     bundle: ForecastBundle, source_file: Path, styles: dict
 ) -> list:
-    subtitle_style = styles["subtitle"]
     body_style = styles["body"]
-    small_style = styles["small"]
     meta = bundle.metadata
     history = bundle.history
     forecast = bundle.forecast_frame
@@ -252,7 +250,6 @@ def _build_executive_summary(
 def _build_model_variables_page(bundle: ForecastBundle, styles: dict) -> list:
     subtitle_style = styles["subtitle"]
     body_style = styles["body"]
-    small_style = styles["small"]
     meta = bundle.metadata
 
     elements: list = [Paragraph("Model &amp; Variables", subtitle_style)]

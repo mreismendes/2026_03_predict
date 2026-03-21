@@ -4,4 +4,5 @@ xlrd
 openpyxl
 python-dateutil
 reportlab
+scikit-learn
 pytest

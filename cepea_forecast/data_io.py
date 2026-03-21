@@ -110,8 +110,6 @@ def load_source_data(data_dir: Path) -> LoadedSourceData:
 
     if bezerro_path is not None:
         bezerro = _load_single_file(bezerro_path)
-        # Prefix BEZERRO columns to avoid name collisions (except date)
-        bezerro_cols = {col: col for col in bezerro.columns if col != "date"}
         merged = boi.merge(bezerro, on="date", how="left", suffixes=("", "_bez"))
     else:
         merged = boi

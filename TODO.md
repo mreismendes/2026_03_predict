@@ -1,14 +1,7 @@
 # TODO — Forecast Pipeline Improvements
 
-## Priority 1: Per-Horizon Quantile Recalibration
-**Expected WQL gain: 5-15% | Effort: 4-6 hrs**
-
-Step-52 intervals are likely miscalibrated. Fix post-hoc using isotonic regression on a calibration set.
-- Reserve last ~250 weeks for rolling-origin calibration
-- For each (quantile_level, horizon_step): fit `sklearn.isotonic.IsotonicRegression` on predicted vs actual
-- Apply recalibration to production forecasts
-- Always enforce quantile monotonicity after recalibration (`np.sort([q01, q05, q09])`)
-- Library: scikit-learn (already available)
+## ~~Priority 1: Per-Horizon Quantile Recalibration~~ DONE
+Implemented in `cepea_forecast/recalibration.py`. Isotonic regression per (quantile, step) fitted via rolling-origin backtest. Monotonicity enforced via `np.sort`. Calibrators persisted as pickle alongside model.
 
 ## Priority 2: NeuralForecast Models (N-HiTS, iTransformer, TiDE)
 **Expected WQL gain: 3-8% | Effort: 6-8 hrs**
