@@ -575,6 +575,41 @@ def _build_ci_analysis(
         body_style,
     ))
 
+    # Raw vs Recalibrated comparison (if both are available)
+    raw = bundle.raw_forecast_frame
+    if raw is not None and not raw.equals(forecast):
+        elements.append(Spacer(1, 0.15 * inch))
+        elements.append(Paragraph("<b>Raw vs Recalibrated Quantiles</b>", body_style))
+        elements.append(Paragraph(
+            "Per-horizon isotonic recalibration adjusts AutoGluon's raw quantile predictions "
+            "using backtest residuals. The table below compares key horizons before and after "
+            "recalibration so you can assess whether the correction is beneficial.",
+            styles.get("small", body_style),
+        ))
+        cmp_data = [["Step", "Raw P10", "Recal P10", "Raw P50", "Recal P50", "Raw P90", "Recal P90", "Raw CI", "Recal CI"]]
+        for step in key_steps:
+            idx = min(step - 1, len(forecast) - 1)
+            r = raw.iloc[idx]
+            c = forecast.iloc[idx]
+            raw_ci = float(r["0.9"]) - float(r["0.1"])
+            cal_ci = float(c["0.9"]) - float(c["0.1"])
+            cmp_data.append([
+                str(step),
+                f"R$ {float(r['0.1']):,.2f}", f"R$ {float(c['0.1']):,.2f}",
+                f"R$ {float(r['0.5']):,.2f}", f"R$ {float(c['0.5']):,.2f}",
+                f"R$ {float(r['0.9']):,.2f}", f"R$ {float(c['0.9']):,.2f}",
+                f"R$ {raw_ci:,.2f}", f"R$ {cal_ci:,.2f}",
+            ])
+        cmp_table = Table(
+            cmp_data, repeatRows=1,
+            colWidths=[0.45 * inch] + [1.1 * inch] * 8,
+        )
+        cmp_table.setStyle(TableStyle(_TABLE_STYLE + [
+            ("ALIGN", (0, 1), (-1, -1), "RIGHT"),
+            ("FONTSIZE", (0, 0), (-1, -1), 6.5),
+        ]))
+        elements.extend([Spacer(1, 0.05 * inch), cmp_table])
+
     elements.append(PageBreak())
     return elements
 
