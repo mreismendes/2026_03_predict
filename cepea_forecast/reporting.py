@@ -334,6 +334,92 @@ def _build_model_variables_page(bundle: ForecastBundle, styles: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Page 2b: Model Performance
+# ---------------------------------------------------------------------------
+
+def _build_model_performance_page(bundle: ForecastBundle, styles: dict) -> list:
+    subtitle_style = styles["subtitle"]
+    body_style = styles["body"]
+    meta = bundle.metadata
+
+    elements: list = [Paragraph("Model Performance", subtitle_style)]
+
+    # Best model callout
+    best_model = meta.get("best_model", "N/A")
+    best_score = meta.get("best_score", "N/A")
+    try:
+        score_display = f"{abs(float(best_score)):.4f}"
+    except (ValueError, TypeError):
+        score_display = best_score
+    elements.append(Paragraph(
+        f"<b>Best model:</b> {best_model} &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"<b>Validation WQL:</b> {score_display}",
+        body_style,
+    ))
+    elements.append(Spacer(1, 0.15 * inch))
+
+    # Leaderboard table
+    leaderboard_raw = _safe_json_loads(meta.get("leaderboard", "[]"), [])
+    if leaderboard_raw:
+        elements.append(Paragraph("<b>Model Leaderboard</b>", body_style))
+        lb_data = [["Rank", "Model", "WQL Score", "Fit Time (s)", "Predict Time (s)"]]
+        for rank, entry in enumerate(leaderboard_raw, start=1):
+            model_name = str(entry.get("model", ""))
+            score_val = entry.get("score_val", 0)
+            try:
+                wql = f"{abs(float(score_val)):.4f}"
+            except (ValueError, TypeError):
+                wql = str(score_val)
+            fit_t = entry.get("fit_time_marginal", entry.get("fit_time", ""))
+            pred_t = entry.get("pred_time_val", entry.get("pred_time", ""))
+            try:
+                fit_str = f"{float(fit_t):.1f}"
+            except (ValueError, TypeError):
+                fit_str = str(fit_t)
+            try:
+                pred_str = f"{float(pred_t):.2f}"
+            except (ValueError, TypeError):
+                pred_str = str(pred_t)
+            lb_data.append([str(rank), model_name, wql, fit_str, pred_str])
+
+        lb_table = Table(
+            lb_data, repeatRows=1,
+            colWidths=[0.5 * inch, 3.5 * inch, 1.2 * inch, 1.2 * inch, 1.2 * inch],
+        )
+        style_cmds = list(_TABLE_STYLE) + [
+            ("ALIGN", (0, 1), (0, -1), "CENTER"),
+            ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ]
+        # Bold the best model row
+        if len(lb_data) > 1:
+            style_cmds.append(("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"))
+        lb_table.setStyle(TableStyle(style_cmds))
+        elements.extend([Spacer(1, 0.05 * inch), lb_table])
+    else:
+        elements.append(Paragraph("<i>No leaderboard data available (model trained before metrics capture).</i>", body_style))
+
+    elements.append(Spacer(1, 0.2 * inch))
+
+    # Metric explanation
+    elements.append(Paragraph("<b>Metric Explanation</b>", body_style))
+    elements.append(Paragraph(
+        "<b>WQL (Weighted Quantile Loss)</b> measures forecast accuracy across quantile levels "
+        "(10th, 50th, 90th percentiles). It penalizes both the location of the median forecast "
+        "and the width of prediction intervals. Lower values indicate better probabilistic "
+        "calibration. A WQL of 0.05 means the average quantile error is 5% of the target value.<br/><br/>"
+        "AutoGluon trains multiple model families and combines them via a <b>WeightedEnsemble</b> "
+        "that optimizes WQL on validation windows. The ensemble typically outperforms any "
+        "individual model by blending the strengths of statistical, deep learning, and "
+        "tabular approaches.",
+        body_style,
+    ))
+
+    elements.append(PageBreak())
+    return elements
+
+
+# ---------------------------------------------------------------------------
 # Page 3: Main forecast plot (improved)
 # ---------------------------------------------------------------------------
 
@@ -583,6 +669,9 @@ def generate_forecast_report(
 
     # Page 2: Model & Variables
     story.extend(_build_model_variables_page(bundle, styles))
+
+    # Page 2b: Model Performance
+    story.extend(_build_model_performance_page(bundle, styles))
 
     with TemporaryDirectory(dir=tmp_root) as tmp_dir:
         tmp_dir_path = Path(tmp_dir)

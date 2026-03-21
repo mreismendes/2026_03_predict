@@ -184,6 +184,13 @@ def train_model(
         fit_kwargs["time_limit"] = time_limit
     predictor.fit(**fit_kwargs)
 
+    # --- Capture model leaderboard ---
+    leaderboard = predictor.leaderboard()
+    leaderboard_json = leaderboard.to_json(orient="records")
+    best_model_name = str(leaderboard.iloc[0]["model"]) if len(leaderboard) > 0 else "unknown"
+    best_score = float(leaderboard.iloc[0]["score_val"]) if len(leaderboard) > 0 else 0.0
+    print(f"Best model: {best_model_name} (WQL: {abs(best_score):.4f})")
+
     # --- Per-horizon quantile recalibration via isotonic regression ---
     from cepea_forecast.recalibration import fit_recalibrators, save_calibration
 
@@ -223,6 +230,9 @@ def train_model(
         "num_val_windows": str(num_val_windows),
         "model_trained_at": pd.Timestamp.now(tz="UTC").isoformat(),
         "last_period_end": str(aggregated.index.max().date()),
+        "leaderboard": leaderboard_json,
+        "best_model": best_model_name,
+        "best_score": str(best_score),
     }
     write_metadata(model_dir, metadata)
     return metadata
