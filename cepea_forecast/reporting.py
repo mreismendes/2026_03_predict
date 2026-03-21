@@ -435,10 +435,21 @@ def _build_main_plot(bundle: ForecastBundle, image_path: Path) -> None:
     rolling_52 = history.rolling(52, min_periods=26).mean()
     rolling_window = rolling_52.iloc[-104:]
 
-    # CI fill
+    raw = bundle.raw_forecast_frame
+
+    # Raw CI fill (lighter, behind recalibrated)
+    if raw is not None and not raw.equals(forecast):
+        ax.fill_between(
+            raw["timestamp"], raw["0.1"], raw["0.9"],
+            color=_GRAY_HEX, alpha=0.10, label="80% CI Raw",
+        )
+        ax.plot(raw["timestamp"], raw["0.5"],
+                color=_GRAY_HEX, linewidth=1.2, linestyle="--", alpha=0.5, label="Raw P50")
+
+    # Recalibrated CI fill
     ax.fill_between(
         forecast["timestamp"], forecast["0.1"], forecast["0.9"],
-        color=_ORANGE_HEX, alpha=0.18, label="80% CI (P10–P90)",
+        color=_ORANGE_HEX, alpha=0.18, label="80% CI Recalibrated",
     )
 
     # Rolling mean
@@ -449,9 +460,9 @@ def _build_main_plot(bundle: ForecastBundle, image_path: Path) -> None:
     ax.plot(history_window.index, history_window.values,
             color=_BLUE_HEX, linewidth=1.5, label="History")
 
-    # Forecast P50
+    # Recalibrated P50
     ax.plot(forecast["timestamp"], forecast["0.5"],
-            color=_RED_HEX, linewidth=2.0, label="Forecast (P50)")
+            color=_RED_HEX, linewidth=2.0, label="Forecast P50 (Recalibrated)")
 
     # Forecast mean (secondary)
     ax.plot(forecast["timestamp"], forecast["mean"],
